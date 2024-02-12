@@ -1,0 +1,8 @@
+ideje:
+
+
+Kad je prazno  da tu budu znakovi recimo, i da se automatski briše jedan razmak i unosi znak i onda upisuje razmak po potrebi.
+
+Mod kucanja kao na telefonu par puta na isto dugme
+
+usecase - gaming kada kuca dok cilja.
