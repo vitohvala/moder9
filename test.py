@@ -9,11 +9,11 @@ from itertools import islice
 
 keyboard = Controller()
 
-phoneLayout = True 
+phoneLayout = True
 pasteInstadOfTyping = False
 
 history = [""] * 100
-crtlPressed = False
+ctrlPressed = False
 
 one = ""
 two = ""
@@ -59,18 +59,18 @@ print("Srećno!")
 
 def onKeyUp(event):
     if(event.Key == "Control_L" or event.Key == "Control_R"):
-        crtlPressed = False
+        ctrlPressed = False
 
 def OnKeyPress(event):
-    global one, two, three, four, five, history, crtlPressed
+    global one, two, three, four, five, history, ctrlPressed
     key = event.Key
 
     # Check for ctrl + backspace shortcut:
     if(key == "Control_L" or key == "Control_R"):
-        crtlPressed = True
+        ctrlPressed = True
 
     if key == "BackSpace":
-        if(crtlPressed): 
+        if(ctrlPressed):
             return restart()
 
         else:
@@ -132,14 +132,14 @@ def OnKeyPress(event):
             history[i] = history[i+1]
 
         history[-1] = key
-        
+
         checkLetter("".join(history))
 
 new_hook = pyxhook.HookManager()
 new_hook.KeyDown = OnKeyPress
 new_hook.keyUp = onKeyUp
-new_hook.HookKeyboard() 
-new_hook.start()  
+new_hook.HookKeyboard()
+new_hook.start()
 
 def paste():
     keyboard.press(Key.ctrl)
