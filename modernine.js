@@ -101,7 +101,7 @@ function handleKeyPress(key){
 
     if(key.includes("backspace")){
 
-        if(ctrlPressed) return reset()
+        if(ctrlPressed) return restart()
 
         //optimizovati da samo koristi prethodni niz prosto
         history.pop()
