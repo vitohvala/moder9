@@ -15,12 +15,19 @@ async def handle_client(websocket, path):
     try:
         async for message in websocket:
             print("Received message:", message)
+            data = json.loads(message)
+
+            if(data[0] == "paste"):
+                paste_word(data[1], data[2], data[3])
+
+
     finally:
         connected_clients.remove(websocket)
 
 async def send_message_to_clients(message):
     if connected_clients:  # Avoid errors if no clients are connected
-        await asyncio.wait([client.send(message) for client in connected_clients])
+        await asyncio.gather(*[client.send(message) for client in connected_clients])
+
 
 def on_press(key):
     message = json.dumps(["press", str(key)])
