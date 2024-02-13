@@ -7,8 +7,9 @@ import pyperclip
 
 
 keyboard = Controller()
-
 connected_clients = set()  
+
+paste_in_progress = False
 
 async def handle_client(websocket, path):
     connected_clients.add(websocket)
@@ -30,12 +31,20 @@ async def send_message_to_clients(message):
 
 
 def on_press(key):
-    message = json.dumps(["press", str(key)])
-    asyncio.run(send_message_to_clients(message))
+    global paste_in_progress
+
+    if not paste_in_progress:
+
+        message = json.dumps(["press", str(key)])
+        asyncio.run(send_message_to_clients(message))
 
 def on_release(key):
-    message = json.dumps(["release", str(key)])
-    asyncio.run(send_message_to_clients(message))
+    global paste_in_progress
+
+    if not paste_in_progress:
+
+        message = json.dumps(["release", str(key)])
+        asyncio.run(send_message_to_clients(message))
 
 def keyboard_listener_thread():
     with Listener(on_press=on_press, on_release=on_release) as listener:
@@ -54,6 +63,10 @@ def pressButton(button, times):
 
 def paste_word(word, pasteInstadOfTyping, size):
 
+    global paste_in_progress
+
+    paste_in_progress = True
+
     pressButton(Key.backspace, size)
 
     if pasteInstadOfTyping:
@@ -62,6 +75,8 @@ def paste_word(word, pasteInstadOfTyping, size):
     else:
         for letter in word:
             pressButton(letter, 1)
+
+    paste_in_progress = False
 
 
 if __name__ == "__main__":

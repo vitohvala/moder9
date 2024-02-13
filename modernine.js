@@ -220,11 +220,11 @@ function checkWords(text){
     filteredwords = [...filteredwords.filter(word => word.length === text.length), ...filteredwords.filter(word => word.length !== text.length)]
     console.clear();
 
-    one = filteredwords.length ? filteredwords[0] : " "
-    two = filteredwords.length > 1 ? filteredwords[1] : " "
-    three = filteredwords.length > 2 ? filteredwords[2] : " "
-    four = filteredwords.length > 3 ? filteredwords[3] : " "
-    five = filteredwords.length > 4 ? filteredwords[4] : " "
+    one = filteredwords.length ? filteredwords[0] + " " : " "
+    two = filteredwords.length > 1 ? filteredwords[1] + " " : " "
+    three = filteredwords.length > 2 ? filteredwords[2] + " " : " "
+    four = filteredwords.length > 3 ? filteredwords[3] + " " : " "
+    five = filteredwords.length > 4 ? filteredwords[4] + " " : " "
 
     console.log(one, two, three, four, five)
 }
