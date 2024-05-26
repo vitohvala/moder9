@@ -5,12 +5,15 @@ import fs from 'fs'
 
 let socket;
 
-// Settings 
-const phoneLayout = true;
-const pasteInstadOfTyping = false;
-const fullDictionary = false;
+// Settings
+const phoneLayout = false;
+const pasteInsteadOfTyping = false;
 
-// statuses 
+const includeFullDictionary = false;
+const includePastedWords = true;
+const includeEnteredWords = true;
+
+// statuses
 let ctrlPressed = false;
 
 
@@ -20,8 +23,17 @@ let allWords = []
 let filteredwords = []
 let one = "", two = "", three = "", four = "", five = "";
 
-const files = ["pasted-words.txt", "entered-words.txt"]
-fullDictionary && files.push("dict.txt")
+let files = []
+includeFullDictionary && files.push("dict.txt")
+includeEnteredWords && files.push("entered-words.txt")
+includePastedWords && files.push("pasted-words.txt")
+
+files = files.map(file => {
+    return {
+        name: file,
+        finished: false,
+    }
+})
 
 //možda da na 1 budu naša slova, verovatno će biti preciznije predviđanje
 const letters = {
@@ -36,62 +48,77 @@ const letters = {
     "9" : ["z", "ž"],
 }
 
-files.forEach(file => {
-
-    const text = fs.readFileSync(file, {
-        encoding: "utf8",
-    })
-
-    allWords = [...allWords, ...extractWords(text)];
-})
-
-
-allWords = sortWordsByFrequency(allWords);
-allWords = [...new Set(allWords)];
-
 //functions
-
-function extractWords(text) {
-    let words = text.match(/\b[^\d\W]+\b/g);
-    words = words || [];
-    return words.map(word => word.toLowerCase())
-}
 
 function sortWordsByFrequency(words) {
     const wordCounts = {};
     for (const word of words) {
-      wordCounts[word] = (wordCounts[word] || 0) + 1;
+        wordCounts[word] = (wordCounts[word] || 0) + 1;
     }
-  
+
     const sortedWords = Object.keys(wordCounts).sort((a, b) => wordCounts[b] - wordCounts[a]);
-  
+
     return sortedWords;
 }
-  
-function setupSocket(){
+
+async function setupSocket(){
+
 
     socket = new WebSocket("ws://localhost:8765");
 
     socket.onopen = function(event) {
         console.log("WebSocket connection established.");
+
+
+        files.forEach(file => {
+            sendReadSignal(file.name)
+        })
+
     };
 
     socket.onmessage = function(event) {
 
-        let [eventName, key] = JSON.parse(event.data)
+        let [eventName, data] = JSON.parse(event.data)
 
-        if(key.startsWith("'") && key.endsWith("'"))
-            key = key.substring(1, key.length - 1);
+        if(["press", "release"].includes(eventName)){
+            let key = data;
+
+            if(key.startsWith("'") && key.endsWith("'"))
+                key = key.substring(1, key.length - 1);
 
 
-        if(eventName === "press"){
-            handleKeyPress(key)
+            if(eventName === "press"){
+                handleKeyPress(key)
+            }
+            if(eventName === "release")
+                handleKeyRelease(key)
         }
-        
-        if(eventName === "release")
-            handleKeyRelease(key)
-    
+
+        if(eventName === "got_words"){
+            allWords = [...data]
+
+            const fileName = JSON.parse(event.data)[2];
+
+            files = files.map(file => {
+                if(file.name === fileName)
+                    return {
+                        name: fileName,
+                        finished: true,
+                    }
+
+                else return file;
+            })
+
+            const allFinished = files.every(f => f.finished)
+
+            if(allFinished){
+                allWords = sortWordsByFrequency(allWords);
+                allWords = [...new Set(allWords)];
+            }
+        }
+
     };
+
 }
 
 
@@ -121,7 +148,7 @@ function handleKeyPress(key){
 
         case "/":
             return sendPasteSignal(two);
-        
+
         case "*":
             return sendPasteSignal(three);
 
@@ -133,15 +160,15 @@ function handleKeyPress(key){
 
         case "7":
             if(phoneLayout) return sendPasteSignal(one)
-            finalKey = phoneLayout ? "1" : "7" 
+            finalKey = phoneLayout ? "1" : "7"
             break;
 
         case "8":
-            finalKey = phoneLayout ? "2" : "8" 
+            finalKey = phoneLayout ? "2" : "8"
             break;
 
         case "9":
-            finalKey = phoneLayout ? "3" : "9" 
+            finalKey = phoneLayout ? "3" : "9"
             break;
 
         case "4":
@@ -152,20 +179,20 @@ function handleKeyPress(key){
         case "<65437>":
             finalKey = 5;
             break;
-        
+
         case "6":
             finalKey = 6;
             break;
-        
+
         case "1":
             if(!phoneLayout) return sendPasteSignal(one)
-            finalKey = phoneLayout ? "7" : "1" 
+            finalKey = phoneLayout ? "7" : "1"
             break;
 
         case "2":
-            finalKey = phoneLayout ? "8" : "2" 
+            finalKey = phoneLayout ? "8" : "2"
             break;
-        
+
         case "3":
             finalKey = phoneLayout ? "9" : "3"
             break;
@@ -187,10 +214,16 @@ function sendMessageToPython(message) {
 }
 
 function sendPasteSignal(word){
-    let message = ["paste", word, pasteInstadOfTyping, history.length]
+    let message = ["paste", word, pasteInsteadOfTyping, history.length]
     message = JSON.stringify(message);
     sendMessageToPython(message)
     restart();
+}
+
+function sendReadSignal(fileName){
+    let message = ["get_words_from_file", fileName]
+    message = JSON.stringify(message);
+    sendMessageToPython(message)
 }
 
 function restart(){
@@ -218,7 +251,7 @@ function checkWords(text){
 
 
     filteredwords = [...filteredwords.filter(word => word.length === text.length), ...filteredwords.filter(word => word.length !== text.length)]
-    console.clear();
+    //  console.clear();
 
     one = filteredwords.length ? filteredwords[0] + " " : " "
     two = filteredwords.length > 1 ? filteredwords[1] + " " : " "

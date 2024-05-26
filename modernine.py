@@ -4,10 +4,10 @@ import threading
 from pynput.keyboard import Key, Listener, Controller
 import json
 import pyperclip
-
+import regex as re
 
 keyboard = Controller()
-connected_clients = set()  
+connected_clients = set()
 
 paste_in_progress = False
 
@@ -21,6 +21,13 @@ async def handle_client(websocket, path):
             if(data[0] == "paste"):
                 paste_word(data[1], data[2], data[3])
 
+            if(data[0] == "get_words_from_file"):
+
+                words = get_words_from_file(data[1])
+
+                message = ["got_words", words, data[1]]
+
+                await send_message_to_clients(json.dumps(message))
 
     finally:
         connected_clients.remove(websocket)
@@ -79,11 +86,20 @@ def paste_word(word, pasteInstadOfTyping, size):
     paste_in_progress = False
 
 
+def get_words_from_file(file_path):
+    with open(file_path, "r", encoding="utf-8") as file:
+        text = file.read()
+
+    pattern = r'\b\p{L}+\b'
+    matches = re.findall(pattern, text)
+
+    return matches
+
 if __name__ == "__main__":
-    server = websockets.serve(handle_client, 'localhost', 8765)  
+    server = websockets.serve(handle_client, 'localhost', 8765)
     asyncio.get_event_loop().run_until_complete(server)
 
     listener_thread = threading.Thread(target=keyboard_listener_thread)
     listener_thread.start()
 
-    asyncio.get_event_loop().run_forever() 
+    asyncio.get_event_loop().run_forever()
