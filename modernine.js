@@ -1,5 +1,4 @@
 import WebSocket from "ws"
-import fs from 'fs'
 
 // Global variables
 
@@ -7,7 +6,7 @@ let socket;
 
 // Settings
 const phoneLayout = false;
-const pasteInsteadOfTyping = false;
+const pasteInsteadOfTyping = true;
 
 const includeFullDictionary = false;
 const includePastedWords = true;
