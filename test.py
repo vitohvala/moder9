@@ -52,7 +52,7 @@ print("Pronađeno:", len(words), " reči!")
 
 word_counts = Counter(words)
 words = sorted(word_counts, key=word_counts.get, reverse=True)
-local_words = [:]
+local_words = []
 
 print("Od toga unikatnih:", len(words))
 print("Srećno!")
