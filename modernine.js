@@ -94,7 +94,8 @@ async function setupSocket(){
         }
 
         if(eventName === "got_words"){
-            allWords = [...data]
+
+            allWords = [allWords, ...data]
 
             const fileName = JSON.parse(event.data)[2];
 
@@ -110,18 +111,32 @@ async function setupSocket(){
 
             const allFinished = files.every(f => f.finished)
 
+            console.log("finished reading file: ", fileName);
+
             if(allFinished){
                 allWords = sortWordsByFrequency(allWords);
                 allWords = [...new Set(allWords)];
+
+                console.log("finished reading all files!", allWords.length);
             }
         }
 
     };
 
+    socket.onerror = function(errorEvent){
+        console.log("error event", errorEvent);
+    }
+
+    socket.onclose = function(closeEvent){
+        console.log("close", closeEvent);
+    }
+
 }
 
 
 function handleKeyPress(key){
+
+    console.log("key pressed", key);
 
     if(key.includes("ctrl")) ctrlPressed = true
 
@@ -158,41 +173,50 @@ function handleKeyPress(key){
             return sendPasteSignal(five);
 
         case "7":
+        case "<103>":
             if(phoneLayout) return sendPasteSignal(one)
             finalKey = phoneLayout ? "1" : "7"
             break;
 
         case "8":
+        case "<104>":
             finalKey = phoneLayout ? "2" : "8"
             break;
 
         case "9":
+        case "<105>":
             finalKey = phoneLayout ? "3" : "9"
             break;
 
         case "4":
+        case "<100>":
             finalKey = 4;
             break;
 
         case "5":
         case "<65437>":
+        case "<101>":
             finalKey = 5;
             break;
 
         case "6":
+        case "<102>":
             finalKey = 6;
             break;
 
         case "1":
+        case "<97>":
             if(!phoneLayout) return sendPasteSignal(one)
             finalKey = phoneLayout ? "7" : "1"
             break;
 
         case "2":
+        case "<98>":
             finalKey = phoneLayout ? "8" : "2"
             break;
 
         case "3":
+        case "<99>":
             finalKey = phoneLayout ? "9" : "3"
             break;
     }
