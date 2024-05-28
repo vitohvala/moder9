@@ -11,7 +11,7 @@ def get_words_from_file(file_path):
     return matches
 
 
-includeFullDictionary = False
+includeFullDictionary = True
 includeEnteredWords = True
 includePastedWords = True
 

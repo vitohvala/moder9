@@ -4,9 +4,12 @@ import fs from 'fs'
 
 // Variables
 
-const phoneLayout = false;
+const pythonProgramName = process.platform === "win32" ? "C:\\Python311\\python.exe" : "python3";
+
+const phoneLayout = true;
 const pasteInsteadOfTyping = true;
 const useExistingJSON = false;
+const logs = true;
 
 let allWords = []
 let filteredWords = []
@@ -38,7 +41,7 @@ function handleErrorAndClose(process){
         // Do not log if everything is OK
         if(code == 0) return
 
-        console.log(`Child process exited with code ${code}`);
+        log(`Child process exited with code ${code}`);
     });
 }
 
@@ -50,10 +53,15 @@ function handleKeylogger(data){
 
     if(!data) return;
 
-    let [eventName, key ] = JSON.parse(data);
+    try{
+        let [eventName, key ] = JSON.parse(data);
 
-    if(eventName === "press") handleKeyPress(key);
-    if(eventName === "release") handleKeyRelease(key);
+        if(eventName === "press") handleKeyPress(key);
+        if(eventName === "release") handleKeyRelease(key);
+    }
+    catch(e){
+        console.error("Problem with json");
+    }
 }
 
 function handleKeyPress(key){
@@ -78,6 +86,8 @@ function handleKeyPress(key){
 
     let finalKey = ""
 
+
+    console.log(key);
     switch(key){
 
         case "/":
@@ -152,7 +162,7 @@ function handleKeyPress(key){
 
 function sendPasteSignal(word){
 
-    const pasteProcess = spawn("python3", ["paste.py", word, pasteInsteadOfTyping]);
+    const pasteProcess = spawn(pythonProgramName, ["paste.py", word, pasteInsteadOfTyping]);
 
     handleErrorAndClose(pasteProcess)
 
@@ -229,43 +239,52 @@ function checkWords(text){
 }
 
 
+function log(...args){
+    if(logs) {
+        console.log(...args)
+    }
+}
+
 async function main(){
 
-    console.log("HELLO! PREPARING RESOURCES");
+    log("HELLO! PREPARING RESOURCES");
 
     if(!useExistingJSON){
-        const wordsJsonProcess = spawn("python3", ["createDict.py"]);
+        const wordsJsonProcess = spawn(pythonProgramName, ["createDict.py"]);
         handleErrorAndClose(wordsJsonProcess)
 
         try{
             await waitForJSONFile(wordsJsonProcess);
-            console.log("DICT IS CREATED");
+            log("DICT IS CREATED");
         }
         catch(error){
-            console.log("error loading JSON file", error);
+            log("error loading JSON file", error);
             throw error;
         }
     }
 
-    console.log("READING DICT");
+    log("READING DICT");
 
     const jsonWords = fs.readFileSync("dict.json");
     allWords = JSON.parse(jsonWords).words;
 
-    console.log("DICT LOADED, NUMBER OF WORDS: ", allWords.length);
+    log("DICT LOADED, NUMBER OF WORDS: ", allWords.length);
 
     allWords = sortWordsByFrequency(allWords);
+
+    console.log("top 10 words", allWords.slice(0, 10))
+
     allWords = [...new Set(allWords)];
 
-    console.log("UNIQUE WORDS:", allWords.length);
+    log("UNIQUE WORDS:", allWords.length);
 
-    console.log("STARTING KEYLOGGER");
+    log("STARTING KEYLOGGER");
 
-    const keyloggerProcess = spawn('python3', ['keylogger.py']);
+    const keyloggerProcess = spawn(pythonProgramName, ['keylogger.py']);
     handleErrorAndClose(keyloggerProcess);
     keyloggerProcess.stdout.on('data', handleKeylogger);
 
-    console.log("KEYLOGGER STARTED");
+    log("KEYLOGGER STARTED");
 }
 
 
