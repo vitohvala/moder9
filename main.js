@@ -1,15 +1,18 @@
 import {spawn} from "child_process"
-import fs from 'fs'
+import fs from "fs"
+import os from "os"
 
+import { configDotenv } from "dotenv";
 
 // Variables
+configDotenv();
 
 const pythonProgramName = process.platform === "win32" ? "C:\\Python311\\python.exe" : "python3";
 
-const phoneLayout = true;
-const pasteInsteadOfTyping = true;
-const useExistingJSON = false;
-const logs = true;
+const phoneLayout = JSON.parse(process.env["PHONE_LAYOUT"])
+const pasteInsteadOfTyping = JSON.parse(process.env["PASTE_INSTEAD_OF_TYPING"])
+const useExistingJSON = JSON.parse(process.env["USE_EXISTING_JSON"])
+const logs = JSON.parse(process.env["LOGS"])
 
 let allWords = []
 let filteredWords = []
@@ -54,13 +57,24 @@ function handleKeylogger(data){
     if(!data) return;
 
     try{
-        let [eventName, key ] = JSON.parse(data);
 
-        if(eventName === "press") handleKeyPress(key);
-        if(eventName === "release") handleKeyRelease(key);
+
+        const events = data.split(os.EOL)
+
+        const filteredEvents  = events.filter(e  => e.length !== 0)
+
+
+
+        filteredEvents.forEach(event => {
+            let [eventName, key ] = JSON.parse(event);
+
+            if(eventName === "press") handleKeyPress(key);
+            if(eventName === "release") handleKeyRelease(key);
+        })
     }
     catch(e){
-        console.error("Problem with json");
+        console.error("Problem with json", e);
+        fs.writeFileSync("error.txt", data)
     }
 }
 
@@ -86,8 +100,6 @@ function handleKeyPress(key){
 
     let finalKey = ""
 
-
-    console.log(key);
     switch(key){
 
         case "/":
@@ -227,7 +239,7 @@ function checkWords(text){
 
 
     filteredWords = [...filteredWords.filter(word => word.length === text.length), ...filteredWords.filter(word => word.length !== text.length)]
-    //console.clear();
+    //  console.clear();
 
     one = filteredWords.length ? filteredWords[0] + " " : " "
     two = filteredWords.length > 1 ? filteredWords[1] + " " : " "
@@ -235,9 +247,9 @@ function checkWords(text){
     four = filteredWords.length > 3 ? filteredWords[3] + " " : " "
     five = filteredWords.length > 4 ? filteredWords[4] + " " : " "
 
-    console.log(one, two, three, four, five)
-}
+    if(one !== " ") console.log(one, two, three, four, five)
 
+}
 
 function log(...args){
     if(logs) {

@@ -1,5 +1,12 @@
 import regex as re
 import json
+import os
+
+def str_to_bool(s):
+    if isinstance(s, bool):
+        return s
+    return s.lower() in ["true", "1", "t", "y", "yes"]
+
 
 def get_words_from_file(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
@@ -11,20 +18,25 @@ def get_words_from_file(file_path):
     return matches
 
 
-includeFullDictionary = True
-includeEnteredWords = True
-includePastedWords = True
+INCLUDE_FULL_DICTIONARY = str_to_bool(os.getenv('INCLUDE_FULL_DICTIONARY', True))
+INCLUDE_ENTERED_WORDS = str_to_bool(os.getenv('INCLUDE_ENTERED_WORDS', True))
+INCLUDE_PASTED_WORDS = str_to_bool(os.getenv('INCLUDE_PASTED_WORDS', True))
+
+ENTERED_WORDS_FILE_NAME = os.getenv("ENTERED_WORDS_FILE_NAME", "entered-words.txt")
+PASTED_WORDS_FILE_NAME = os.getenv("PASTED_WORDS_FILE_NAME", "pasted-words.txt")
+DICT_FILE_NAME = os.getenv("DICT_FILE_NAME", "dict.txt")
+
 
 def process_files():
     files = []
     words = []
 
-    if includeFullDictionary:
-        files.append("dict.txt")
-    if includeEnteredWords:
-        files.append("pasted-words.txt")
-    if includeEnteredWords:
-        files.append("entered-words.txt")
+    if INCLUDE_FULL_DICTIONARY:
+        files.append(DICT_FILE_NAME)
+    if INCLUDE_ENTERED_WORDS:
+        files.append(ENTERED_WORDS_FILE_NAME)
+    if INCLUDE_PASTED_WORDS:
+        files.append(PASTED_WORDS_FILE_NAME)
 
     for file_path in files:
         file_words = get_words_from_file(file_path)

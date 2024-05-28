@@ -1,4 +1,3 @@
-# keylogger.py
 from pynput.keyboard import Key, Listener
 import json
 import os
