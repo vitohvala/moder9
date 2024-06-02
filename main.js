@@ -13,6 +13,12 @@ const phoneLayout = JSON.parse(process.env["PHONE_LAYOUT"])
 const pasteInsteadOfTyping = JSON.parse(process.env["PASTE_INSTEAD_OF_TYPING"])
 const useExistingJSON = JSON.parse(process.env["USE_EXISTING_JSON"])
 const logs = JSON.parse(process.env["LOGS"])
+const disableDict = JSON.parse(process.env["DISABLE_DICT"])
+const repeatingDelay = JSON.parse(process.env["REPEATING_DELAY"])
+let timeout = null;
+let currentLetter = "";
+let currentKey = "";
+
 
 let allWords = []
 let filteredWords = []
@@ -33,6 +39,8 @@ const letters = {
     "8" : ["t", "u", "v"],
     "9" : ["z", "ž"],
 }
+
+let currentLetterIndex = 0;
 
 function handleErrorAndClose(process){
     process.stderr.on('data', (data) => {
@@ -82,18 +90,57 @@ function handleKeyPress(key){
 
     if(key.includes("ctrl")) ctrlPressed = true
 
+    if(disableDict){
+        typeKey(key)
+    }
+    else{
+        checkDict(key)
+    }
+
+}
+
+function typeKey(key){
+
+    if(!"123456789".includes(key)){
+        return
+    }
+
+    // When user press new key it is signal to paste old letter
+    if(currentKey !== key && currentLetter) {
+        if(timeout) clearTimeout(timeout)
+        sendPasteSignal(currentLetter, currentLetterIndex)
+        currentLetterIndex = 0;
+    }
+
+    currentKey = key;
+    currentLetter = letters[currentKey][currentLetterIndex];
+
+    if(timeout) clearTimeout(timeout)
+
+    console.log("current letter", currentLetter);
+
+    timeout = setTimeout(() => {
+        sendPasteSignal(currentLetter, currentLetterIndex);
+        currentLetterIndex = 0;
+        currentKey = "";
+        currentLetter = ""
+    }, repeatingDelay);
+
+    currentLetterIndex = (currentLetterIndex + 1) % letters[currentKey].length;
+
+}
+
+function checkDict(key){
     if(key.includes("backspace")){
 
         if(ctrlPressed) return restart()
 
-        //optimizovati da samo koristi prethodni niz prosto
         history.pop()
         checkWords(history.join(""));
         return;
 
     }
 
-    // Do not check first because "backspace" includes "space".
     if(key.includes("space")){
         return restart()
     }
@@ -169,12 +216,16 @@ function handleKeyPress(key){
 
     checkWords(history.join(""))
 
-
 }
 
-function sendPasteSignal(word){
+function sendPasteSignal(word, length){
 
-    const pasteProcess = spawn(pythonProgramName, ["paste.py", word, pasteInsteadOfTyping]);
+    if(!length) length = word.length;
+
+    console.log("sending paste signal for", word);
+
+    pasteInProgress = true;
+    const pasteProcess = spawn(pythonProgramName, ["paste.py", word, pasteInsteadOfTyping, length]);
 
     handleErrorAndClose(pasteProcess)
 
@@ -221,6 +272,10 @@ function restart(){
     history = [];
     filteredWords = [...allWords];
     pasteInProgress = false;
+    currentLetterIndex = 0;
+    currentLetter = "";
+    currentKey = "";
+    timeout = null;
 }
 
 
@@ -257,9 +312,7 @@ function log(...args){
     }
 }
 
-async function main(){
-
-    log("HELLO! PREPARING RESOURCES");
+async function prepareDictResources(){
 
     if(!useExistingJSON){
         const wordsJsonProcess = spawn(pythonProgramName, ["createDict.py"]);
@@ -284,11 +337,22 @@ async function main(){
 
     allWords = sortWordsByFrequency(allWords);
 
-    console.log("top 10 words", allWords.slice(0, 10))
-
     allWords = [...new Set(allWords)];
 
     log("UNIQUE WORDS:", allWords.length);
+}
+
+async function main(){
+
+    log("HELLO! PREPARING RESOURCES");
+
+    if(!disableDict){
+        await prepareDictResources();
+    }
+
+    else{
+        log("NOT USING DICT")
+    }
 
     log("STARTING KEYLOGGER");
 
