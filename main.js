@@ -220,9 +220,13 @@ function checkDict(key){
 
 function sendPasteSignal(word, length){
 
+
+    if(length === 0){
+        length = letters[currentKey].length
+    }
+
     if(!length) length = word.length;
 
-    console.log("sending paste signal for", word);
 
     pasteInProgress = true;
     const pasteProcess = spawn(pythonProgramName, ["paste.py", word, pasteInsteadOfTyping, length]);
