@@ -133,3 +133,7 @@ dist
 # Personal messages and dicts
 entered-words.txt
 pasted-words.txt
+facebook-messages.txt
+facebook-messages
+error.txt
+dict.json

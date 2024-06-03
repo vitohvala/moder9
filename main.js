@@ -59,6 +59,8 @@ function handleKeylogger(data){
     try{
 
 
+        console.log("data", data);
+
         const events = data.split(os.EOL)
 
         const filteredEvents  = events.filter(e  => e.length !== 0)
