@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <linux/input.h>
 #include <sys/stat.h>
+#include <glob.h>
 
 #define LIMIT 9
 #define NEXT (LIMIT - 1)
@@ -95,13 +96,13 @@ char *get_word(Node **current, char *numbers) {
 }
 
 void node_free(Node* root) {
-  for (int i = 0; i < 9; i++) {
-    if (root->next[i] != NULL) {
-      node_free(root->next[i]);
+    for (int i = 0; i < 9; i++) {
+        if (root->next[i] != NULL) {
+            node_free(root->next[i]);
+        }
     }
-  }
-  free(root->word);
-  free(root);
+    free(root->word);
+    free(root);
 }
 
 int main(int argc, char **argv) {
@@ -159,7 +160,12 @@ file_err:
     fclose(dictionary);
     printf("Zavrseno\n");
     
-    fd = open("/dev/input/event3", O_RDONLY);
+
+    glob_t kbddev;                               
+    glob("/dev/input/by-path/*-kbd", 0, 0, &kbddev);
+    for(int i = 0; i < kbddev.gl_pathc; i++ ){
+        fd = open(kbddev.gl_pathv[i], O_RDONLY);
+    }
     if(fd < 0) goto err;
     char buffer[100];
     size_t ind = 0;
@@ -178,6 +184,7 @@ file_err:
         if(tmp[0] != '1') printf("%s\n", tmp);
     }
 err:
+    globfree(&kbddev);
     node_free(node);
     return 0;
 }
