@@ -1,16 +1,22 @@
+#include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 #include <linux/input.h>
 #include <sys/stat.h>
 
+#define LIMIT 9
+#define NEXT (LIMIT - 1)
+
 typedef struct Node {
     char *word;
-    struct Node *next[9];
+    struct Node *next[LIMIT];
 } Node;
 
 struct input_event ev;
@@ -35,34 +41,48 @@ uint8_t get_key(int fd) {
 
 } 
 
-//Ovo bi trebalo da radi drugacije????
 uint8_t get_index(char s) {
+    
+    static char prev;
+    if(prev == -60) {
+        switch (s) {
+            case -115: case -116: case -121: case -122: return 0;
+            case -111: case -112: return 1;
+        }
+    } else if(prev == -59){
+        switch (s) {
+            case -66: case -67: return 7;
+            case -95: case -96: return 5;
+        }
+    }
+            
+    prev = s;
     switch(s) {
-        case 'a': case 'b': case 'c': case -60: return 0;
-        case 'A': case 'B': case 'C': return 0;
-        case 'd': case 'e': case 'f': case -111: case -112: return 1;
-        case 'D': case 'E': case 'F': return 1;
-        case 'g': case 'h': case 'i': case -115: case -116:  return 2;
-        case 'G': case 'H': case 'I': return 2;
-        case 'j': case 'k': case 'l': case -121: case -122: return 3;
-        case 'J': case 'K': case 'L': return 3;
-        case 'm': case 'n': case 'o': case -59: return 4;
-        case 'M': case 'N': case 'O': return 4;
-        case 'p': case 'q': case 'r': case 's': case -66: case -67: return 5;
+        case 'a': case 'b': case 'c':           return 0;
+        case 'A': case 'B': case 'C':           return 0;
+        case 'd': case 'e': case 'f':           return 1;
+        case 'D': case 'E': case 'F':           return 1;
+        case 'g': case 'h': case 'i':           return 2;
+        case 'G': case 'H': case 'I':           return 2;
+        case 'j': case 'k': case 'l':           return 3;
+        case 'J': case 'K': case 'L':           return 3;
+        case 'm': case 'n': case 'o':           return 4;
+        case 'M': case 'N': case 'O':           return 4;
+        case 'p': case 'q': case 'r': case 's': return 5;
         case 'P': case 'Q': case 'R': case 'S': return 5;
-        case 't': case 'u': case 'v': case -95: case -96:  return 6;
-        case 'T': case 'U': case 'V': return 6;
+        case 't': case 'u': case 'v':           return 6;
+        case 'T': case 'U': case 'V':           return 6;
         case 'w': case 'x': case 'y': case 'z': return 7;
         case 'W': case 'X': case 'Y': case 'Z': return 7;
-        case '#': return 8;
-        default: return 1;
     }
+    if(s > 31 && !isalnum(s)) return 8;
+    return 9;
 }
 
 char *get_word(Node **current, char *numbers) {
     if(numbers[0] == '0') {
-        if((*current)->next[8] == NULL) return "1";
-        (*current) = (*current)->next[8];
+        if((*current)->next[NEXT] == NULL) return "1";
+        (*current) = (*current)->next[NEXT];
         return (*current)->word;
     }
     for(size_t i = 0; i< strlen(numbers); i++){
@@ -74,10 +94,10 @@ char *get_word(Node **current, char *numbers) {
     else  return (*current)->word;
 }
 
-void trie_free(Node* root) {
+void node_free(Node* root) {
   for (int i = 0; i < 9; i++) {
     if (root->next[i] != NULL) {
-      trie_free(root->next[i]);
+      node_free(root->next[i]);
     }
   }
   free(root->word);
@@ -98,31 +118,47 @@ int main(int argc, char **argv) {
         int i;
         for(i = 0; i < strlen(str); i++){
             if(str[i] == '\n') break;
+            if(str[i] == -60 || str[i] == -59){
+                get_index(str[i]);
+                continue;
+            }
             uint8_t index = get_index(str[i]);
+            if(index == 9) {
+                printf("%d\n", str[i]);
+                goto file_err;
+            }
+
             if(node->next[index] == NULL){
                 Node *new = (Node *)calloc(1, sizeof(*new));
                 node->next[index] = new;
             }
-            node = node->next[index];;
+            node = node->next[index];
         }
-        char *word = (char *) calloc(i, sizeof(char));
-        strncpy(word, str, i);
+        int str_len = strlen(str);
+        str[str_len - 1] = '\0';
+        char *word = (char *) malloc(str_len * sizeof(char));
+        if(word == NULL){
+            perror("malloc");
+            break;
+        }
+        strncpy(word, str, str_len);
         if(node->word == NULL){
             node->word = word;
         } else {
-            while (node->next[8] != NULL) {
-                node = node->next[8];
+            while (node->next[NEXT] != NULL) {
+                node = node->next[NEXT];
             }
             Node* new = (Node*)calloc(1, sizeof(Node));
-            node->next[8] = new;
             new->word = word;
+            node->next[NEXT] = new;
         }
         node = root;
-
     } 
+
+file_err:
     fclose(dictionary);
     printf("Zavrseno\n");
-
+    
     fd = open("/dev/input/event3", O_RDONLY);
     if(fd < 0) goto err;
     char buffer[100];
@@ -133,6 +169,7 @@ int main(int argc, char **argv) {
         if(key == '0') break;
     }
 
+    buffer[ind] = '\0';
     printf("%s\n", buffer);
     printf("%s\n", get_word(&root, buffer));
     char tmp[100];
@@ -141,6 +178,6 @@ int main(int argc, char **argv) {
         if(tmp[0] != '1') printf("%s\n", tmp);
     }
 err:
-    trie_free(node);
+    node_free(node);
     return 0;
 }
