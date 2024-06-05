@@ -15,9 +15,7 @@ def paste():
     keyboard.release('v')
     keyboard.release(Key.ctrl)
 
-def paste_word(word, pasteInsteadOfTyping):
-
-    size = len(word)
+def paste_word(word, pasteInsteadOfTyping, size):
 
     pressButton(Key.backspace, size)
 
@@ -32,5 +30,6 @@ def paste_word(word, pasteInsteadOfTyping):
 
 if __name__ == "__main__":
     word = sys.argv[1]
-    pasteInsteadOfTyping = sys.argv[2]
-    paste_word(word, pasteInsteadOfTyping)
+    paste_instead_of_typing = sys.argv[2]
+    number_of_letters_to_delete = int(sys.argv[3]) if len(sys.argv) > 3 else len(word)
+    paste_word(word, paste_instead_of_typing, number_of_letters_to_delete)
