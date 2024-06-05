@@ -1,7 +1,11 @@
 import fs, { readFileSync } from "fs"
 import path from "path";
 
-const mainFolder = "facebook-messages"
+import { configDotenv } from "dotenv";
+configDotenv();
+
+
+const mainFolder = process.env["FACEBOOK_FOLDER_NAME"]
 let allJsonFiles = []
 const allMessages = []
 
@@ -37,4 +41,4 @@ allJsonFiles.forEach(file => {
     })
 })
 
-fs.writeFileSync("facebook-messages.txt", allMessages.join(" "))
+fs.writeFileSync(process.env["FACEBOOK_DICT_NAME"], allMessages.join(" "))
