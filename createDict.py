@@ -21,11 +21,13 @@ def get_words_from_file(file_path):
 INCLUDE_FULL_DICTIONARY = str_to_bool(os.getenv('INCLUDE_FULL_DICTIONARY', True))
 INCLUDE_ENTERED_WORDS = str_to_bool(os.getenv('INCLUDE_ENTERED_WORDS', True))
 INCLUDE_PASTED_WORDS = str_to_bool(os.getenv('INCLUDE_PASTED_WORDS', True))
+INCLUDE_FACEBOOK_DICT = str_to_bool(os.getenv('INCLUDE_FACEBOOK_DIST ', True))
+
 
 ENTERED_WORDS_FILE_NAME = os.getenv("ENTERED_WORDS_FILE_NAME", "entered-words.txt")
 PASTED_WORDS_FILE_NAME = os.getenv("PASTED_WORDS_FILE_NAME", "pasted-words.txt")
 DICT_FILE_NAME = os.getenv("DICT_FILE_NAME", "dict.txt")
-
+FACEBOOK_DICT_FILE_NAME = os.getenv("FACEBOOK_DICT_NAME", "facebook-messages.txt")
 
 def process_files():
     files = []
@@ -37,6 +39,9 @@ def process_files():
         files.append(ENTERED_WORDS_FILE_NAME)
     if INCLUDE_PASTED_WORDS:
         files.append(PASTED_WORDS_FILE_NAME)
+
+    if INCLUDE_FACEBOOK_DICT:
+        files.append(FACEBOOK_DICT_FILE_NAME)
 
     for file_path in files:
         file_words = get_words_from_file(file_path)
