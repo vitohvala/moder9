@@ -105,6 +105,31 @@ void node_free(Node* root) {
     free(root);
 }
 
+void print_words_recursive(Node *node) {
+
+    if (node == NULL) return;
+    if (node->word!= NULL) printf("%s\n", node->word);
+
+    for (int i = 0; i < 9; i++) {
+        print_words_recursive(node->next[i]);
+    }
+}
+
+void starts_with(Node *root, char *prefix) {
+
+    Node *current = root;
+
+    for (size_t i = 0; i < strlen(prefix); i++) {
+        int num = prefix[i] - '0' - 2;
+        if (current->next[num] == NULL) return;
+        current = current->next[num];
+    }
+
+    print_words_recursive(current);
+}
+
+
+
 int main(int argc, char **argv) {
     
     FILE *dictionary = fopen("dict.txt", "r");
@@ -112,9 +137,12 @@ int main(int argc, char **argv) {
         perror("fopen");
         return 1;
     }
+    clock_t start, end;
+    double el;
     char str[100];
     Node *root = (Node *)calloc(1, sizeof(*root));
     Node *node = root;
+    start = clock();
     while(fgets(str, sizeof(str), dictionary)){
         int i;
         for(i = 0; i < strlen(str); i++){
@@ -133,7 +161,7 @@ int main(int argc, char **argv) {
                 Node *new = (Node *)calloc(1, sizeof(*new));
                 node->next[index] = new;
             }
-            node = node->next[index];
+           node = node->next[index];
         }
         int str_len = strlen(str);
         str[str_len - 1] = '\0';
@@ -155,10 +183,12 @@ int main(int argc, char **argv) {
         }
         node = root;
     } 
+    end = clock();
+    el = (double) (end - start) / CLOCKS_PER_SEC;
 
 file_err:
     fclose(dictionary);
-    printf("Zavrseno\n");
+    printf("Finished %lf\n", el);
     
 
     glob_t kbddev;                               
@@ -174,15 +204,17 @@ file_err:
         if(key > '1' && key <= '9') buffer[ind++] = key;
         if(key == '0') break;
     }
-
+    start = clock();
     buffer[ind] = '\0';
-    printf("%s\n", buffer);
     printf("%s\n", get_word(&root, buffer));
-    char tmp[100];
-    while(tmp[0] != '1'){
-        strcpy(tmp, get_word(&root, "0"));
-        if(tmp[0] != '1') printf("%s\n", tmp);
+    strcpy(str, get_word(&root, "0"));
+    while (str[0] != '1') {
+        printf("%s\n", str);
+        strcpy(str, get_word(&root, "0"));
     }
+    end = clock();
+    el = (double) (end - start) / CLOCKS_PER_SEC;
+    printf("Finished searching %lf\n", el);
 err:
     globfree(&kbddev);
     node_free(node);
