@@ -1,6 +1,3 @@
-#define _POSIX_C_SOURCE 199309L
-
-
 #include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -21,7 +18,6 @@
 #define LIMIT 9
 #define NEXT (LIMIT - 1)
 #define DICTIONARY_FILE "dictionary_rs.txt"
-#define STIME (1000000000L / 10)
 
 typedef struct Node {
     char *word;
@@ -32,8 +28,8 @@ typedef struct xdata{
     Display *display;
     Window root;
     Window active_window;
-    XEvent event;
     Atom property;
+    long ev_mask;
 } XData;
 
 
@@ -178,7 +174,7 @@ int set_input(XData *xdata) {
     int format_return;
     XGetInputFocus(xdata->display, &xdata->active_window, &format_return); 
     if(xdata->active_window)
-        XSelectInput(xdata->display, xdata->active_window, KeyPress | KeyRelease);
+        XSelectInput(xdata->display, xdata->active_window, xdata->ev_mask);
     return format_return;
 }
 
@@ -188,6 +184,17 @@ int set_input(XData *xdata) {
  *      manji fajl koji ce da sadrzi reci koje se ponavljaju
  *      handle input
  * */
+
+
+
+void xdata_init(XData *xdata){
+    xdata->display = XOpenDisplay(NULL);
+    xdata->root = DefaultRootWindow(xdata->display);
+    xdata->property = XInternAtom(xdata->display, "_NET_ACTIVE_WINDOW", False);
+    xdata->ev_mask = (KeyPressMask | KeyReleaseMask | FocusChangeMask);
+    
+    XSelectInput(xdata->display, xdata->root, xdata->ev_mask);
+}
 
 
 int main(int argc, char **argv) {
@@ -260,29 +267,28 @@ file_err:
     size_t ind = 0;
 
     XData xdata = {0};
-    xdata.display = XOpenDisplay(NULL);
-    xdata.root = DefaultRootWindow(xdata.display);
-    xdata.property = XInternAtom(xdata.display, "_NET_ACTIVE_WINDOW", False);
-    
-    XSelectInput(xdata.display, xdata.root, KeyPressMask | KeyReleaseMask);
-
-    struct timespec ts = {0};
-    ts.tv_nsec = STIME;
+    xdata_init(&xdata);
 
     while(1){
         set_input(&xdata);
-        if(XPending(xdata.display) > 0){
-            XNextEvent(xdata.display, &xdata.event);
-            if(xdata.event.type == KeyPress){
-                KeySym keysym = XLookupKeysym(&xdata.event.xkey, 0);
-                if(keysym == XK_q ) break; 
-                else if((keysym > XK_KP_1 && keysym < XK_KP_9) ||
-                        (keysym > XK_1 && keysym < XK_9))
-                    buffer[ind++] = (char) keysym;
-            }
+        XEvent ev = {0};
+        XNextEvent(xdata.display, &ev);
+        if(ev.type == KeyPress){
+            KeySym keysym = XLookupKeysym(&ev.xkey, 0);
+            if(keysym == XK_q) break; 
+            else if((keysym > XK_KP_1 && keysym < XK_KP_9) ||
+                    (keysym > XK_1 && keysym < XK_9))
+                buffer[ind++] = (char) keysym;
         }
-        nanosleep(&ts, NULL);
+        if(ev.type == FocusOut){
+            set_input(&xdata);
+        } 
+        //nanosleep(&ts, NULL);
     }
+    Atom clipboard = XInternAtom(xdata.display, "CLIPBOARD", False);
+    Atom targetType = XInternAtom(xdata.display, "UTF8_STRING", False);
+    XConvertSelection(xdata.display, clipboard, targetType, None, xdata.active_window, CurrentTime);
+    XFlush(xdata.display);
     start = clock();
     buffer[ind] = '\0';
     puts(buffer);
@@ -297,6 +303,6 @@ file_err:
     printf("Finished searching %lf\n", el);
     XCloseDisplay(xdata.display);
 err:
-    node_free(node);
+    node_free(root);
     return 0;
 }
