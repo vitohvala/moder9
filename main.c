@@ -1,3 +1,6 @@
+#define _POSIX_C_SOURCE 199309L
+
+
 #include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -7,41 +10,34 @@
 #include <strings.h>
 #include <sys/types.h>
 #include <time.h>
+#include <X11/X.h>
+#include <X11/Xlib.h>
+#include <X11/keysym.h>
+#include <X11/Xatom.h>
 #include <unistd.h>
 #include <linux/input.h>
 #include <sys/stat.h>
-#include <glob.h>
 
 #define LIMIT 9
 #define NEXT (LIMIT - 1)
+#define DICTIONARY_FILE "dictionary_rs.txt"
+#define STIME (1000000000L / 10)
 
 typedef struct Node {
     char *word;
     struct Node *next[LIMIT];
 } Node;
 
-struct input_event ev;
-int fd;
-uint8_t get_key(int fd) {
-    read(fd, &ev, sizeof(ev));
-    if (ev.type == EV_KEY && ev.value == 0) {
-        switch (ev.code) {
-            case 2: return  '1';
-            case 3: return  '2';
-            case 4: return  '3';
-            case 5: return  '4';
-            case 6: return  '5';
-            case 7: return  '6';
-            case 8: return  '7';
-            case 9: return  '8';
-            case 10: return '9';
-            case 11: return '0';
-        }
-    }
-    return 10;
+typedef struct xdata{
+    Display *display;
+    Window root;
+    Window active_window;
+    XEvent event;
+    Atom property;
+} XData;
 
-} 
 
+//Ova funkcija moze da bude bolja??? mozda
 uint8_t get_index(char s) {
     
     static char prev;
@@ -54,6 +50,55 @@ uint8_t get_index(char s) {
         switch (s) {
             case -66: case -67: return 7;
             case -95: case -96: return 5;
+        }
+    } else if(prev == -48 ) {
+        switch (s) {
+            //     А          Б        Ц          Ч         Ћ
+            case -112: case -111: case -90: case -89: case -117: return 0;
+            //    а          б
+            case -80:  case -79: return 0;
+            //     Д          Е          Ф         Ђ
+            case -108: case -107: case -92: case -126: return 1;
+            //     д          е                
+            case -76:  case -75: return 1;
+            //     Г          Х         И
+            case -109: case -91: case -104: return 2;
+            //     г          и
+            case  -77: case -72:            return 2;
+            //     Ј          К          Л          Љ
+            case -120: case -102: case -101: case -119: return 3; 
+            //      к        л
+            case  -70: case -69: return 3; 
+            //     М         Н           Њ         О
+            case -100: case -99:  case -118: case -98: return 4;
+            //     м         н          о
+            case -68:  case -67: case -66: return 4;
+            //     П         Р          С          Ш          п                     
+            case -97:  case -96:  case -95: case -88:  case -65:return 5;
+            //     Т         У          В          в
+            case -94:  case -93: case -110: case -78:  return 6;
+            //      З          Ж         Џ         з          ж
+            case -105: case -106: case -113: case -73: case -74: return 7;
+        }
+    } else if(prev == -47) {
+        switch (s) {
+            //     ц          ч           ћ
+            case -122: case -121: case -101: return 0;
+            //     ђ          ф
+            case -110: case -124: return 1;
+            //     х
+            case -123: return 2;
+            //     ј          љ
+            case -104: case -103: return 3;
+            //     њ
+            case -102: return 4;
+            //     р          с         ш
+            case -128: case -127: case -120: return 5;
+            //     т          у             
+            case -126: case -125: return 6;
+            // џ
+            case -97: return 7;
+
         }
     }
             
@@ -76,10 +121,11 @@ uint8_t get_index(char s) {
         case 'w': case 'x': case 'y': case 'z': return 7;
         case 'W': case 'X': case 'Y': case 'Z': return 7;
     }
-    if(s > 31 && !isalnum(s)) return 8;
+    if((s > 31 && !isalnum(s))) return 8;
     return 9;
 }
 
+//funkcija koju treba doraditi
 char *get_word(Node **current, char *numbers) {
     if(numbers[0] == '0') {
         if((*current)->next[NEXT] == NULL) return "1";
@@ -105,13 +151,13 @@ void node_free(Node* root) {
     free(root);
 }
 
-void print_words_recursive(Node *node) {
+void print_recursive(Node *node) {
 
     if (node == NULL) return;
     if (node->word!= NULL) printf("%s\n", node->word);
 
     for (int i = 0; i < 9; i++) {
-        print_words_recursive(node->next[i]);
+        print_recursive(node->next[i]);
     }
 }
 
@@ -125,14 +171,28 @@ void starts_with(Node *root, char *prefix) {
         current = current->next[num];
     }
 
-    print_words_recursive(current);
+    print_recursive(current);
 }
 
+int set_input(XData *xdata) {
+    int format_return;
+    XGetInputFocus(xdata->display, &xdata->active_window, &format_return); 
+    if(xdata->active_window)
+        XSelectInput(xdata->display, xdata->active_window, KeyPress | KeyRelease);
+    return format_return;
+}
+
+/* TODO:
+ *      Error checking
+ *      paste
+ *      manji fajl koji ce da sadrzi reci koje se ponavljaju
+ *      handle input
+ * */
 
 
 int main(int argc, char **argv) {
     
-    FILE *dictionary = fopen("dict.txt", "r");
+    FILE *dictionary = fopen(DICTIONARY_FILE, "r");
     if(!dictionary){
         perror("fopen");
         return 1;
@@ -142,19 +202,21 @@ int main(int argc, char **argv) {
     char str[100];
     Node *root = (Node *)calloc(1, sizeof(*root));
     Node *node = root;
+    uint8_t skip_word = 0;
     start = clock();
     while(fgets(str, sizeof(str), dictionary)){
         int i;
         for(i = 0; i < strlen(str); i++){
             if(str[i] == '\n') break;
-            if(str[i] == -60 || str[i] == -59){
+            if(str[i] == -60 || str[i] == -59 || str[i] == -48 || str[i] == -47) {
                 get_index(str[i]);
                 continue;
             }
             uint8_t index = get_index(str[i]);
-            if(index == 9) {
-                printf("%d\n", str[i]);
-                goto file_err;
+            //printf("%d -- %d, %d, %s", index, str[i], i, str);
+            if(index > 8) {
+                skip_word = 1;
+                break;
             }
 
             if(node->next[index] == NULL){
@@ -162,6 +224,10 @@ int main(int argc, char **argv) {
                 node->next[index] = new;
             }
            node = node->next[index];
+        }
+        if(skip_word) {
+            skip_word = 0;
+            continue;
         }
         int str_len = strlen(str);
         str[str_len - 1] = '\0';
@@ -190,23 +256,38 @@ file_err:
     fclose(dictionary);
     printf("Finished %lf\n", el);
     
-
-    glob_t kbddev;                               
-    glob("/dev/input/by-path/*-kbd", 0, 0, &kbddev);
-    for(int i = 0; i < kbddev.gl_pathc; i++ ){
-        fd = open(kbddev.gl_pathv[i], O_RDONLY);
-    }
-    if(fd < 0) goto err;
     char buffer[100];
     size_t ind = 0;
+
+    XData xdata = {0};
+    xdata.display = XOpenDisplay(NULL);
+    xdata.root = DefaultRootWindow(xdata.display);
+    xdata.property = XInternAtom(xdata.display, "_NET_ACTIVE_WINDOW", False);
+    
+    XSelectInput(xdata.display, xdata.root, KeyPressMask | KeyReleaseMask);
+
+    struct timespec ts = {0};
+    ts.tv_nsec = STIME;
+
     while(1){
-        uint8_t key = get_key(fd);
-        if(key > '1' && key <= '9') buffer[ind++] = key;
-        if(key == '0') break;
+        set_input(&xdata);
+        if(XPending(xdata.display) > 0){
+            XNextEvent(xdata.display, &xdata.event);
+            if(xdata.event.type == KeyPress){
+                KeySym keysym = XLookupKeysym(&xdata.event.xkey, 0);
+                if(keysym == XK_Meta_L || keysym == XK_Meta_R) continue;
+                if(keysym == (XK_Shift_L | XK_q) || keysym == XK_q) break; 
+                else if((keysym > XK_KP_1 && keysym < XK_KP_9) ||
+                        (keysym > XK_1 && keysym < XK_9))
+                    buffer[ind++] = (char) keysym;
+            }
+        }
+        nanosleep(&ts, NULL);
     }
     start = clock();
     buffer[ind] = '\0';
-    printf("%s\n", get_word(&root, buffer));
+    puts(buffer);
+    printf("\n%s\n", get_word(&root, buffer));
     strcpy(str, get_word(&root, "0"));
     while (str[0] != '1') {
         printf("%s\n", str);
@@ -215,8 +296,8 @@ file_err:
     end = clock();
     el = (double) (end - start) / CLOCKS_PER_SEC;
     printf("Finished searching %lf\n", el);
+    XCloseDisplay(xdata.display);
 err:
-    globfree(&kbddev);
     node_free(node);
     return 0;
 }
