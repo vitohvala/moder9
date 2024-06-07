@@ -275,8 +275,7 @@ file_err:
             XNextEvent(xdata.display, &xdata.event);
             if(xdata.event.type == KeyPress){
                 KeySym keysym = XLookupKeysym(&xdata.event.xkey, 0);
-                if(keysym == XK_Meta_L || keysym == XK_Meta_R) continue;
-                if(keysym == (XK_Shift_L | XK_q) || keysym == XK_q) break; 
+                if(keysym == XK_q ) break; 
                 else if((keysym > XK_KP_1 && keysym < XK_KP_9) ||
                         (keysym > XK_1 && keysym < XK_9))
                     buffer[ind++] = (char) keysym;
