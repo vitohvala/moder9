@@ -21,7 +21,7 @@ pub fn build(b: *std.Build) void {
 
     mainc.addCSourceFile(.{
         .file = .{ .path = "main.c" },
-        .flags = &.{ "-Wall", "-std=c99", "-pedantic", "-Wextra" },
+        .flags = &.{ "-Wall", "-std=c99", "-pedantic", "-Wextra", "-g" },
     });
     mainc.linkLibC();
     mainc.linkSystemLibrary("X11");

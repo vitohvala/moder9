@@ -1,4 +1,6 @@
 A
+znam
+Znam
 AD
 AFP
 AFŽ
@@ -276,6 +278,9 @@ Albina
 Albinoni
 Albion
 Albot
+Bio
+si
+Iljaz
 Albreht
 Albukerki
 Albulj
