@@ -1,23 +1,24 @@
+#define _XOPEN_SOURCE
+
 #include <X11/X.h>
 #include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <time.h>
+#include <unistd.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <X11/Xatom.h>
-#include <unistd.h>
-#include <limits.h>
 
 #define LIMIT 9
 #define NEXT (LIMIT - 1)
 
-#define DEFER(p, s, which_err) \
+#define IFNULL(p, s, which_err) \
     if(p == NULL) { \
         perror(s); \
-        if(dictionary != NULL) fclose(dictionary); \
         goto which_err; }   
 
 #define FREE_2DARRAY(arr, len) \
@@ -41,6 +42,9 @@ typedef struct xdata{
     Atom property;
     long ev_mask;
 } XData;
+
+
+volatile sig_atomic_t Running;
 
 
 //Ova funkcija moze da bude bolja??? mozda
@@ -109,23 +113,16 @@ uint8_t get_index(char s) {
     }
 
     prev = s;
+    s = tolower(s);
     switch(s) {
         case 'a': case 'b': case 'c':           return 0;
-        case 'A': case 'B': case 'C':           return 0;
         case 'd': case 'e': case 'f':           return 1;
-        case 'D': case 'E': case 'F':           return 1;
         case 'g': case 'h': case 'i':           return 2;
-        case 'G': case 'H': case 'I':           return 2;
         case 'j': case 'k': case 'l':           return 3;
-        case 'J': case 'K': case 'L':           return 3;
         case 'm': case 'n': case 'o':           return 4;
-        case 'M': case 'N': case 'O':           return 4;
         case 'p': case 'q': case 'r': case 's': return 5;
-        case 'P': case 'Q': case 'R': case 'S': return 5;
         case 't': case 'u': case 'v':           return 6;
-        case 'T': case 'U': case 'V':           return 6;
         case 'w': case 'x': case 'y': case 'z': return 7;
-        case 'W': case 'X': case 'Y': case 'Z': return 7;
     }
     if((s > 31 && !isalnum(s))) return 8;
     return 9;
@@ -238,32 +235,25 @@ void send_key_event(XData *xdata, KeySym keysym, Bool m, long Mask) {
     XSendEvent(xdata->display, xdata->active_window, 1, KeyPressMask, (XEvent *)&event);
     XFlush(xdata->display);
 }
-int main(int argc, char **argv) {
 
-    if(argc < 2) {
-        usage();
-        return 0;
-    }
+void signal_handler(int sig){
+    Running = 0;
+    printf("\nExiting! Got signal %d\n", sig);
+}
 
-    FILE *dictionary = fopen(argv[1], "r");
-    if(!dictionary){
-        perror("fopen");
-        return 1;
-    }
-    clock_t start, end;
-    double el;
+#define RET1IFNULL(ptr, s) \
+    if(ptr == NULL){  perror(s); return 1; }
+
+uint8_t populate_node(char *filename, Node **root){
+    FILE *dictionary = fopen(filename, "r");
+    RET1IFNULL(dictionary, "fopen");
     char str[100];
-    Node *root = (Node *)calloc(1, sizeof(*root));
-    if(root == NULL) {
-        perror("calloc");
-        fclose(dictionary);
-        return 1;
-    }
-    Node *node = root;
+    *root = (Node *)calloc(1, sizeof(Node));
+    RET1IFNULL(root, "calloc");
+    Node *node = *root;
     uint8_t skip_word = 0;
-    start = clock();
     while(fgets(str, sizeof(str), dictionary)){
-        int i;
+        size_t i;
         for(i = 0; i < strlen(str); i++){
             if(str[i] == '\n') break;
             if(str[i] == -60 || str[i] == -59 || str[i] == -48 || str[i] == -47) {
@@ -279,7 +269,7 @@ int main(int argc, char **argv) {
 
             if(node->next[index] == NULL){
                 Node *new = (Node *)calloc(1, sizeof(*new));
-                DEFER(new, "calloc", node_err);
+                RET1IFNULL(new, "calloc");
                 node->next[index] = new;
             }
             node = node->next[index];
@@ -291,10 +281,8 @@ int main(int argc, char **argv) {
         int str_len = strlen(str);
         str[str_len - 1] = '\0';
         char *word = (char *) malloc(str_len * sizeof(char));
-        DEFER(word, "malloc", node_err); 
-
+        RET1IFNULL(word, "malloc");
         strncpy(word, str, str_len);
-        DEFER(word, "strncpy", node_err);
 
         if(node->word == NULL){
             node->word = word;
@@ -303,53 +291,87 @@ int main(int argc, char **argv) {
                 node = node->next[NEXT];
             }
             Node* new = (Node*)calloc(1, sizeof(Node));
-            DEFER(new, "calloc", node_err);
+            RET1IFNULL(new, "calloc");
             new->word = word;
             node->next[NEXT] = new;
         }
-        node = root;
-    } 
+        node = *root;
+    }
+    fclose(dictionary);
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    if(argc < 2) {
+        usage();
+        return 0;
+    }
+
+
+    clock_t start, end;
+    double el;
+    start = clock();
+
+    Node *root = NULL;
+    if(populate_node(argv[1], &root) == 1) {
+        goto end;
+    }
+    Node *node = root;
+   
 
     end = clock();
     el = (double) (end - start) / CLOCKS_PER_SEC;
 
-    fclose(dictionary);
-    printf("Finished %lf\n", el);
+    printf("Finished reading file %s [%lfs]\n", argv[1], el);
+
 
     XData xdata = {0};
     if(xdata_init(&xdata)){
         perror("X11");
-        goto x_err;
+        goto node_err;
     }
     char buffer[100];
     size_t ind = 0;
     size_t prev_ind = 0;
-    Atom clipboard = XInternAtom(xdata.display, "CLIPBOARD", False);
-    Atom targets = XInternAtom(xdata.display, "TARGETS", False);
-    Atom UTF8 = XInternAtom(xdata.display, "UTF8_STRING", False);
-    Atom text = XInternAtom(xdata.display, "TEXT", False);
+    //Atom clipboard = XInternAtom(xdata.display, "CLIPBOARD", False);
+    //Atom targets = XInternAtom(xdata.display, "TARGETS", False);
+    //Atom UTF8 = XInternAtom(xdata.display, "UTF8_STRING", False);
+    //Atom text = XInternAtom(xdata.display, "TEXT", False);
 
     size_t suggested_size = 0;
     char **suggested = (char **) malloc(sizeof(char *) * 10);
-    DEFER(suggested, "malloc", sug_err);
+    IFNULL(suggested, "malloc", x_err);
     size_t capacity = 10;
     int selected = -1;
-    XSetSelectionOwner(xdata.display, clipboard, xdata.root, CurrentTime);
-    if(XGetSelectionOwner(xdata.display, clipboard) != xdata.root) printf("ne radi");
-    Atom xclip = XInternAtom(xdata.display, "XSEL_DATA", False);
-    Atom target;
-    Atom TARGETS = XInternAtom(xdata.display , "TARGETS", False);
+    //XSetSelectionOwner(xdata.display, clipboard, xdata.root, CurrentTime);
+    //if(XGetSelectionOwner(xdata.display, clipboard) != xdata.root) printf("ne radi");
+    //Atom xclip = XInternAtom(xdata.display, "XSEL_DATA", False);
+    //Atom target;
+    //Atom TARGETS = XInternAtom(xdata.display , "TARGETS", False);
     //XConvertSelection(xdata.display, clipboard, TARGETS, xclip, xdata.active_window, CurrentTime);
     XEvent ev = {0};
     set_input(&xdata);
-    Window st_win = xdata.active_window;
-    while(1){
-	set_input(&xdata);
+
+    Running = 1;
+    struct sigaction sa = {0};
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    int signals[] = { SIGINT, SIGTERM, SIGSEGV, SIGABRT, SIGHUP };
+    for(int i = 0; i < 5; i++)
+        sigaction(signals[i], &sa, NULL);
+
+    Running = 1;
+    //Window st_win = xdata.active_window;
+    system("setxkbmap rs -variant latin");
+    while(Running){
+        set_input(&xdata);
         XNextEvent(xdata.display, &ev);
-        
+
         if(ev.type == KeyPress){
             KeySym keysym = XLookupKeysym(&ev.xkey, 0);
-            if(keysym == XK_q) break;
+            if(keysym == XK_q) {  puts("\nExiting!"); break;}
             else if(keysym == XK_1) {
                 buffer[ind] = '\0';
                 if(selected < 0){
@@ -366,15 +388,15 @@ int main(int argc, char **argv) {
                         int word_size = strlen(word);
                         word[word_size] = '\0';
                         suggested[suggested_size] = (char *) malloc(sizeof(char) * word_size + 1);
-                        DEFER(suggested[suggested_size], "malloc", sug_err); 
+                        IFNULL(suggested[suggested_size], "malloc",sug_err); 
 
                         strncpy(suggested[suggested_size], word, word_size + 1);
-                        DEFER(suggested[suggested_size], "strncpy", sug_err);
+                        IFNULL(suggested[suggested_size], "strncpy",sug_err);
                         suggested_size += 1;
                         if(suggested_size >= capacity){
                             capacity += 10;
                             char **ptr_to_s = (char **)realloc(suggested, sizeof(char *) * capacity);
-                            DEFER(ptr_to_s, "realloc", sug_err);
+                            IFNULL(ptr_to_s, "realloc",sug_err);
                             suggested = ptr_to_s;
                         }
                         buffer[0] = '0';
@@ -384,24 +406,55 @@ int main(int argc, char **argv) {
                 }
                 if(selected > -1){
                     printf("\nsuggested size: %zu\nArray:\n", suggested_size);
-                    for (int i = 0; i < suggested_size; i++) {
+                    for (size_t i = 0; i < suggested_size; i++) {
                         printf("[%s] ", suggested[i]);
                     }
 
                     printf("prev_ind = %zu\n", prev_ind);
-                    for(int i = 0; i < prev_ind + 1; i++){
+                    for(size_t i = 0; i < prev_ind + 1; i++){
                         send_key_event(&xdata, XK_BackSpace, 1, 0);
                         send_key_event(&xdata, XK_BackSpace, 0, 0);
                     }
                     puts("");
-                    printf("%s\n", suggested[selected++]);
-                    if(selected > suggested_size - 1) selected = 0;
-                    send_key_event(&xdata, XK_v, 1, ControlMask | ShiftMask);
-                    send_key_event(&xdata, XK_v, 0, ControlMask | ShiftMask);
+                    printf("%s\n", suggested[selected]);
+                    // this is only temporary solution 
+                    // Maybe I'll implement to paste 
+                    // or figure out something else 
+                    size_t len = strlen(suggested[selected]);
+                    for(size_t i = 0; i < len; ++i){
+                        KeySym key = 0;
+                        long keyMask = 0;
+                        char charkey = suggested[selected][i];
+                        if(isupper(charkey)) keyMask = ShiftMask;
+                        if(charkey == -59 && i < len - 1) {
+                            if(suggested[selected][i+1] == -67 || 
+                                    -96 == suggested[selected][i+1]) keyMask = ShiftMask;
+                            switch (suggested[selected][++i]) {
+                                case -66: key = XK_zcaron; break;
+                                case -95: key = XK_scaron; break;
+                            }
+                        } else if (charkey == -60) {
+                            if(!(suggested[selected][i+1] % 2)) keyMask = ShiftMask;
+                            switch (suggested[selected][++i]) {
+                                case -121: key = XK_Cacute; break;
+                                case -115: key = XK_Ccaron; break;
+                                case -111: key = XK_Dstroke; break;
+                            }
+                        } 
+                        else {
+                            key = (KeySym) charkey;
+                        }
+                        send_key_event(&xdata, key, 1, keyMask);
+                        send_key_event(&xdata, key, 0, keyMask);
+                    }
+                    //KeySym k = XK_Scaron;
+                    //send_key_event(&xdata, k, 1, ShiftMask);
+                    //send_key_event(&xdata, k, 0, ShiftMask);
+                    if((size_t)++selected > suggested_size - 1) selected = 0;
+                    XSync(xdata.display, False);
                     //XConvertSelection(xdata.display, clipboard, targets, xclip,
                     //                    xdata.active_window, CurrentTime);
                     //XSendEvent(xdata.display, xdata.root, False, 0, &event);
-                    XFlush(xdata.display);
                 }
             } else if ((keysym > XK_KP_1 && keysym <= XK_KP_9) || (keysym > XK_1 && keysym <= XK_9))
             {  
@@ -422,42 +475,42 @@ int main(int argc, char **argv) {
             }
         } else if(ev.type == FocusOut){
             set_input(&xdata);
-	    //puts("FocusOut");
+            //puts("FocusOut");
         } else if(ev.type == FocusIn) {
-	    //puts("FocusIn");
+            //puts("FocusIn");
             set_input(&xdata);
-	}
+        }
         if(ev.type == SelectionRequest){
             puts("SelectionRequest");
-	    if (ev.xselectionrequest.selection == clipboard && selected > -1){
-	    XSelectionRequestEvent  request = ev.xselectionrequest;
-		    XChangeProperty(request.display, request.requestor, request.property, request.target, 8, 
-				    PropModeReplace, (unsigned char *)suggested[selected], strlen(suggested[selected]));
-		    XSelectionEvent sendEvent;
-		    sendEvent.type = SelectionNotify;
-		    sendEvent.serial = request.serial;
-		    sendEvent.send_event = request.send_event;
-		    sendEvent.display = request.display;
-		    sendEvent.requestor = request.requestor;
-		    sendEvent.selection = request.selection;
-		    sendEvent.target = request.target;
-		    sendEvent.property = request.property;
-		    sendEvent.time = request.time;
-             
+            /*if (ev.xselectionrequest.selection == clipboard && selected > -1){
+                XSelectionRequestEvent  request = ev.xselectionrequest;
+                XChangeProperty(request.display, request.requestor, request.property, request.target, 8, 
+                        PropModeReplace, (unsigned char *)suggested[selected], strlen(suggested[selected]));
+                XSelectionEvent sendEvent;
+                sendEvent.type = SelectionNotify;
+                sendEvent.serial = request.serial;
+                sendEvent.send_event = request.send_event;
+                sendEvent.display = request.display;
+                sendEvent.requestor = request.requestor;
+                sendEvent.selection = request.selection;
+                sendEvent.target = request.target;
+                sendEvent.property = request.property;
+                sendEvent.time = request.time;
 
-		    if(XSendEvent (xdata.display, sendEvent.requestor, 0, 0, (XEvent *)&sendEvent) == 0)
-			    puts("Pao");
-		    //XFlush(xdata.display);q
-	    }
+
+                if(XSendEvent (xdata.display, sendEvent.requestor, 0, 0, (XEvent *)&sendEvent) == 0)
+                    puts("Pao");
+                //XFlush(xdata.display);q
+            }*/
         }
 
         if(ev.type == SelectionNotify){
             puts("SelectionNotify");
         }
-	if(ev.type == DestroyNotify){
-	    puts("Destroy");
+        if(ev.type == DestroyNotify){
+            puts("Destroy");
             set_input(&xdata);
-	}
+        }
     }
 
 sug_err:
@@ -466,5 +519,7 @@ x_err:
     XCloseDisplay(xdata.display);
 node_err:
     node_free(node);
+end:
+    system("setxkbmap us");
     return 0;
 }

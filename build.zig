@@ -14,13 +14,13 @@ pub fn build(b: *std.Build) void {
     //
 
     const mainc = b.addExecutable(.{
-        .name = "main",
+        .name = "moder9",
         .target = target,
         .optimize = optimize,
     });
 
     mainc.addCSourceFile(.{
-        .file = .{ .path = "main.c" },
+        .file = .{ .src_path = .{ .owner = b, .sub_path = "main.c" } },
         .flags = &.{ "-Wall", "-std=c99", "-pedantic", "-Wextra", "-g" },
     });
     mainc.linkLibC();

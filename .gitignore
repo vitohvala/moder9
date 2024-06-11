@@ -140,5 +140,6 @@ dict.json
 facebook-messages
 
 #zig cache dir and bin
+.zig-cache
 zig-cache
 zig-out
