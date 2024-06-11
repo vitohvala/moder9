@@ -193,7 +193,6 @@ void set_input(XData *xdata) {
  *      Error checking
  *      pasteq
  *      manji fajl koji ce da sadrzi reci koje se ponavljaju
- *      handle input
  * */
 
 uint8_t xdata_init(XData *xdata){
